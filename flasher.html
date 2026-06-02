@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MCHOSE V9 Pro - WebHID OTA Flasher</title>
+<style>
+  :root { --bg:#0e1116; --panel:#161b22; --fg:#e6edf3; --muted:#8b949e;
+          --accent:#2f81f7; --ok:#3fb950; --warn:#d29922; --err:#f85149; --line:#30363d; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+         background:var(--bg); color:var(--fg); padding:24px; }
+  .wrap { max-width:820px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 18px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+           padding:16px; margin-bottom:16px; }
+  .warn { border-color:var(--warn); background:#1d1a0e; }
+  .warn h2 { color:var(--warn); margin:0 0 8px; font-size:15px; }
+  .warn ul { margin:0; padding-left:20px; }
+  .warn li { margin:4px 0; }
+  .diag { border-color:var(--accent); background:#0d1626; }
+  .diag h2 { color:var(--accent); margin:0 0 8px; font-size:15px; }
+  button { font:inherit; padding:9px 16px; border-radius:8px; border:1px solid var(--line);
+           background:#21262d; color:var(--fg); cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.danger  { background:var(--err); border-color:var(--err); color:#fff; }
+  button.diagbtn { background:#143b66; border-color:var(--accent); color:#fff; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:8px 0; }
+  input[type=file] { color:var(--muted); }
+  .kv { color:var(--muted); }
+  .kv b { color:var(--fg); }
+  progress { width:100%; height:18px; }
+  #log { background:#0a0d12; border:1px solid var(--line); border-radius:8px; padding:10px;
+         height:300px; overflow:auto; font-family:ui-monospace,Consolas,monospace; font-size:12px;
+         white-space:pre-wrap; }
+  .t-ok{color:var(--ok)} .t-warn{color:var(--warn)} .t-err{color:var(--err)} .t-dim{color:var(--muted)}
+  .t-tx{color:#79c0ff} .t-rx{color:#d2a8ff}
+  code { background:#0a0d12; padding:1px 5px; border-radius:4px; }
+  .small { font-size:12px; }
+  /* Big red focus-loss banner (shown when the tab loses focus during an active flash) */
+  #focusBanner { display:none; position:fixed; top:0; left:0; right:0; z-index:9999;
+                 background:var(--err); color:#fff; font-weight:700; font-size:16px;
+                 text-align:center; padding:14px 18px; line-height:1.35;
+                 box-shadow:0 2px 12px rgba(0,0,0,.6); }
+  #focusBanner.show { display:block; }
+  /* Full-screen countdown overlay before streaming starts */
+  #countdown { display:none; position:fixed; inset:0; z-index:9998;
+               background:rgba(8,10,14,.92); color:var(--fg);
+               flex-direction:column; align-items:center; justify-content:center;
+               text-align:center; padding:24px; }
+  #countdown.show { display:flex; }
+  #countdown .cdHead { font-size:22px; font-weight:700; color:var(--warn); margin:0 0 10px; }
+  #countdown .cdMsg  { font-size:16px; max-width:520px; margin:0 0 18px; }
+  #countdown .cdNum  { font-size:96px; font-weight:800; color:var(--accent); line-height:1; }
+</style>
+</head>
+<body>
+<div id="focusBanner"></div>
+<div id="countdown">
+  <div class="cdHead">KEEP THIS TAB IN FRONT</div>
+  <div class="cdMsg">Do NOT switch windows, minimize, or click away. Background tabs are throttled by the browser, which will stall the firmware stream and the device will abort. Streaming starts in:</div>
+  <div class="cdNum" id="cdNum">3</div>
+</div>
+<div class="wrap">
+  <h1>MCHOSE V9 Pro - WebHID OTA Flasher</h1>
+  <p class="sub">Self-contained. Protocol matched <b>verbatim</b> to the official MCHOSE PC OTA tool (class S$). Chrome/Edge only (requires WebHID).</p>
+
+  <div class="panel warn">
+    <h2>READ BEFORE FLASHING</h2>
+    <ul>
+      <li><b>Power on the V9 Pro headset and keep it within 2.4G range of the dongle.</b> ENTER UPDATE
+          for the headset only succeeds if the headset is powered, paired, and in range -- the dongle
+          relays the firmware over 2.4G. If READY never arrives, this is the usual cause.</li>
+      <li><b>If unsure, click DIAGNOSTIC first.</b> It connects, sends ENTER UPDATE, and for 15s dumps
+          every input report and readable feature report. Paste that output back if it still fails.</li>
+      <li><b>Flash <code>headset_noop.bin</code> FIRST.</b> It is byte-identical to stock and proves the
+          whole flash path (enter / stream / verify) works on your unit before you change anything.</li>
+      <li><b>Keep your original stock firmware</b> (the .bin you downloaded from MCHOSE) somewhere safe.
+          It is your recovery image.</li>
+      <li><b>Do NOT unplug</b> the dongle/headset, sleep the PC, or close this tab during a flash.</li>
+      <li><b>Keep this browser tab in the FOREGROUND for the entire flash.</b> Do not switch windows,
+          minimize, or open another tab. Browsers throttle background tabs, which freezes the firmware
+          stream; the headset idle-times-out after ~10s without data and aborts. A screen wake lock is
+          requested automatically, and a red banner will appear if focus is lost.</li>
+      <li>Flash <b>HEADSET</b> firmware only here. Do not feed it a dongle image.</li>
+      <li>This is <i>your own</i> hardware. You accept the risk of bricking it.</li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <button id="btnConnect" class="primary">1. Connect (MCHOSE V9 Pro dongle)</button>
+      <span id="devInfo" class="kv">No device.</span>
+    </div>
+    <div class="row">
+      <label>2. Firmware file: <input id="file" type="file" accept=".bin" /></label>
+      <span id="fileInfo" class="kv"></span>
+    </div>
+    <div class="row">
+      <button id="btnFlash" class="danger" disabled>3. FLASH (headset)</button>
+      <label class="kv"><input type="checkbox" id="ackBox" /> I read the warnings, my stock image is backed up, headset is on &amp; in range</label>
+    </div>
+    <div class="row">
+      <progress id="prog" value="0" max="100"></progress>
+      <span id="pct" class="kv" style="min-width:48px;text-align:right">0%</span>
+    </div>
+  </div>
+
+  <div class="panel diag">
+    <h2>DIAGNOSTIC (no firmware is sent)</h2>
+    <p class="small kv" style="margin:0 0 8px">
+      Connects, attaches the input listener, sends only the ENTER UPDATE command (report 0x55, target=headset),
+      then for 15s logs EVERY input report and sweeps EVERY readable feature report ID. Use this if a flash
+      times out at READY, then copy the log and report back what the device actually answered.
+    </p>
+    <div class="row">
+      <button id="btnDiag" class="diagbtn">Run DIAGNOSTIC (connect + enter-update + 15s sniff)</button>
+      <label class="kv"><input type="radio" name="diagTarget" value="headset" checked /> headset</label>
+      <label class="kv"><input type="radio" name="diagTarget" value="dongle" /> dongle</label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row" style="justify-content:space-between">
+      <b>Verbose log</b>
+      <div class="row" style="margin:0">
+        <label class="kv small"><input type="checkbox" id="verboseBox" checked /> verbose (log every HID event)</label>
+        <button id="btnCopy">Copy log</button>
+        <button id="btnClear">Clear</button>
+      </div>
+    </div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================================
+   MCHOSE V9 Pro WebHID OTA protocol -- matched verbatim to the official tool.
+   Reference: reverse-engineered from the official MCHOSE WebHID OTA tool.
+   ---------------------------------------------------------------------------
+   Single control report ID 0x55 (85) for ENTER UPDATE + all status. Data on
+   report 0x41 (65). Everything below is the OFFICIAL behavior, not a guess:
+
+   1) FILTER (official): requestDevice({filters:[{vendorId:0x291D, productId:0x385D}]})
+      No usagePage / usage / collection filter. Takes devices[0]. open() if not opened.
+
+   2) PRE-COMMANDS: NONE. start() does: attach inputreport listener, then
+      immediately updateInit() (ENTER UPDATE), then wait for READY. No version
+      query / handshake / unlock / mode-set / feature-report probe is sent first.
+
+   3) ENTER UPDATE = device.sendReport(85, payload)  -- OUTPUT report, NOT feature.
+        payload = Uint8Array(63).fill(0)
+        payload[0] = 85           // 0x55 -- the report id is DUPLICATED as data byte 0
+        payload[1] = (target==="dongle") ? 0 : 1   // 0=dongle, 1=headset
+      *** This is the bug that made the old flasher time out: it set payload[0]=1
+          (target at index 0) and omitted the 0x55 duplicate, so the device never
+          recognized the command and never replied [02,01,00]. Correct is
+          payload[0]=0x55, payload[1]=1. ***
+
+   4) READY / STATUS = 'inputreport' EVENT LISTENER (the official tool does NOT
+      poll and does NOT use feature reports at all -- 0 occurrences of
+      sendFeatureReport / receiveFeatureReport / getReport in the bundle).
+        n = new Uint8Array(event.data.buffer)   // event.data EXCLUDES the reportId
+        READY when: event.reportId===85 && n[0]===2 && n[1]===1 && n[2]===0  => [02,01,00]
+      Official READY timeout is 5000ms. We use a more generous timeout (default 18s)
+      because the wireless 2.4G relay can be slow, AND -- belt and suspenders -- we
+      also poll receiveFeatureReport across candidate report IDs in parallel, in
+      case THIS firmware variant happens to answer on a feature report instead of an
+      input report. The event listener path is the canonical one; the poll is only a
+      fallback so we never miss READY whichever transport the device uses.
+
+   5) FIRMWARE STREAM = device.sendReport(65, chunk)  -- OUTPUT report 0x41.
+        CHUNK = 63 bytes. Stream the WHOLE .bin from offset 0 (incl. AOTA header)
+        in 63-byte slices; final slice zero-padded to 63. NO inter-chunk delay --
+        sent back-to-back, throttled ONLY by device pause flow-control.
+
+   6) FLOW CONTROL (report 85, same inputreport listener):
+        n[0]===96 && n[1]===255 => PAUSE  ([0x60,0xFF])
+        n[0]===96 && n[1]===0   => RESUME ([0x60,0x00])  (resolves the wait)
+
+   7) RESULT (report 85, inputreport listener):
+        n[0]===1 && n[1]===1 && n[2]===0 => SUCCESS  ([01,01,00])
+        n[0]===1 && n[1]===0 && n[2]===0 => FAIL     ([01,00,00])
+
+   HEADSET-VIA-DONGLE: no special path. Same dongle HID handle, same report ids,
+   same stream; only payload[1] differs (1=headset, 0=dongle). The dongle relays
+   the 0x41 chunks to the headset over 2.4G.
+   ============================================================================ */
+
+const VID = 0x291D;          // 10525  MCHOSE
+const PID = 0x385D;          // 14429  V9 Pro (dongle HID interface)
+const REPORT_ENTER = 0x55;   // 85  control + all status (in & out)
+const REPORT_DATA  = 0x41;   // 65  firmware data (out)
+const ENTER_LEN = 63;        // ENTER UPDATE payload length (Uint8Array(63))
+const CHUNK = 63;            // firmware payload bytes per 0x41 report
+
+// READY timeout. Official is 5000ms; we extend for the wireless relay.
+const READY_TIMEOUT_MS = 20000;
+const RESULT_TIMEOUT_MS = 90000;
+// Hot-loop write retry (transient "Failed to write the report" DOMExceptions).
+const WRITE_RETRIES = 3;          // attempts per chunk before giving up
+const WRITE_BACKOFF_MS = 15;      // backoff between retry attempts
+const LOG_EVERY = 1000;           // log chunk progress only every N chunks (+first+last)
+// Feature-report fallback poll (NOT part of the official tool; safety net only).
+const FEATURE_POLL_IDS = [0x55, 0x41, 0x01, 0x60, 0x02, 0x00];
+const FEATURE_POLL_INTERVAL_MS = 250;
+// Diagnostic sniff window.
+const DIAG_WINDOW_MS = 15000;
+
+const $ = id => document.getElementById(id);
+const logEl = $("log");
+
+function ts() { const d = new Date(); return d.toLocaleTimeString() + "." + String(d.getMilliseconds()).padStart(3, "0"); }
+function log(msg, cls) {
+  const line = document.createElement("div");
+  if (cls) line.className = cls;
+  line.textContent = `[${ts()}] ${msg}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+const hex2 = b => b.toString(16).padStart(2, "0");
+function hexDump(u8, max) {
+  const n = (max == null) ? u8.length : Math.min(u8.length, max);
+  let s = "";
+  for (let i = 0; i < n; i++) s += (i ? " " : "") + hex2(u8[i]);
+  if (n < u8.length) s += " ...(" + u8.length + "B)";
+  return s;
+}
+function dvToU8(dv) { return new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength); }
+const verbose = () => $("verboseBox").checked;
+
+let device = null;
+let fwBytes = null;       // Uint8Array of the chosen .bin
+let busy = false;         // true during flash OR diagnostic
+let listenerAttached = false;
+let flashing = false;     // true ONLY during an active FLASH stream (focus guard / disconnect abort)
+let disconnected = false; // set by the 'disconnect' event so the hot loop can abort cleanly
+let wakeLock = null;      // screen wake lock held during a flash
+
+// ---- protocol state, fed by the single inputreport handler ----------------
+let paused = false;
+let readyResolve = null;  // resolves(true) when [02,01,00] arrives on report 0x55
+let resultResolve = null; // resolves(true/false) when [01,01,00]/[01,00,00] arrives
+let resumeResolve = null; // resolves when RESUME [60,00] arrives while paused
+let diagMode = false;     // when true, the handler just logs (no flow effects)
+
+// Single inputreport handler -- mirrors _deviceCallback in the official tool,
+// plus verbose logging of EVERY input report.
+function onInputReport(e) {
+  const id = e.reportId;
+  const u8 = dvToU8(e.data);            // payload only, EXCLUDES reportId
+  const n0 = u8.length > 0 ? u8[0] : -1;
+  const n1 = u8.length > 1 ? u8[1] : -1;
+  const n2 = u8.length > 2 ? u8[2] : -1;
+
+  if (verbose() || diagMode) {
+    log(`RX inputreport id=0x${hex2(id)} (${u8.length}B): ${hexDump(u8, 16)}`, "t-rx");
+  }
+
+  if (diagMode) return; // during DIAGNOSTIC we only observe
+
+  // READY: report 0x55, [02,01,00]
+  if (id === REPORT_ENTER && n0 === 0x02 && n1 === 0x01 && n2 === 0x00) {
+    log("--> Device READY (0x55 [02 01 00]). Entered update mode.", "t-ok");
+    if (readyResolve) { const r = readyResolve; readyResolve = null; r(true); }
+    return;
+  }
+  // FLOW CONTROL: report 0x55, [60,FF]=pause / [60,00]=resume
+  if (id === REPORT_ENTER && n0 === 0x60 && n1 === 0xFF) {
+    paused = true; log("--> PAUSE (0x55 [60 FF]) -- flow control.", "t-warn"); return;
+  }
+  if (id === REPORT_ENTER && n0 === 0x60 && n1 === 0x00) {
+    paused = false; log("--> RESUME (0x55 [60 00]).", "t-dim");
+    if (resumeResolve) { const r = resumeResolve; resumeResolve = null; r(); }
+    return;
+  }
+  // RESULT: report 0x55, [01,01,00]=success / [01,00,00]=fail
+  if (id === REPORT_ENTER && n0 === 0x01 && n2 === 0x00 && (n1 === 0x01 || n1 === 0x00)) {
+    const ok = (n1 === 0x01);
+    log(ok ? "--> SUCCESS (0x55 [01 01 00])." : "--> FAIL (0x55 [01 00 00]).", ok ? "t-ok" : "t-err");
+    if (resultResolve) { const r = resultResolve; resultResolve = null; r(ok); }
+    return;
+  }
+}
+
+function attachInputHandler(dev) {
+  if (listenerAttached) return;
+  dev.addEventListener("inputreport", onInputReport);
+  listenerAttached = true;
+  if (verbose()) log("inputreport listener attached.", "t-dim");
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ---- screen wake lock (req 1) ---------------------------------------------
+async function acquireWakeLock() {
+  try {
+    if (navigator.wakeLock && navigator.wakeLock.request) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      log("Screen wake lock acquired (display will stay on during flash).", "t-dim");
+      wakeLock.addEventListener && wakeLock.addEventListener("release", () => {
+        if (verbose()) log("Wake lock was released by the system.", "t-dim");
+      });
+    } else {
+      log("navigator.wakeLock not available; cannot keep the screen awake (proceeding anyway).", "t-warn");
+    }
+  } catch (err) {
+    log("Wake lock request failed: " + err.message + " (proceeding anyway).", "t-warn");
+    wakeLock = null;
+  }
+}
+async function releaseWakeLock() {
+  try { if (wakeLock) { await wakeLock.release(); log("Screen wake lock released.", "t-dim"); } }
+  catch (_) {}
+  wakeLock = null;
+}
+
+// ---- focus / visibility guard (req 2) -------------------------------------
+const focusBannerEl = $("focusBanner");
+function showFocusBanner() {
+  focusBannerEl.textContent =
+    "TAB LOST FOCUS -- THE FLASH WILL STALL! Browsers throttle background tabs, freezing the " +
+    "firmware stream. The headset aborts after ~10s without data. BRING THIS TAB BACK TO THE " +
+    "FOREGROUND NOW.";
+  focusBannerEl.classList.add("show");
+}
+function hideFocusBanner() { focusBannerEl.classList.remove("show"); }
+function onFocusLost(reason) {
+  if (!flashing) return;
+  showFocusBanner();
+  log(`*** WARNING: tab lost focus (${reason}) during an ACTIVE flash. The browser will THROTTLE ` +
+      `this tab, freezing HID writes; the headset idle-times-out after ~10s and will ABORT. ` +
+      `Bring this tab back to the FOREGROUND immediately. ***`, "t-err");
+}
+function onFocusRegained() {
+  if (!flashing) return;
+  hideFocusBanner();
+  log("Tab is back in the foreground. Streaming should resume at full speed.", "t-ok");
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") onFocusLost("tab hidden / minimized");
+  else onFocusRegained();
+});
+window.addEventListener("blur", () => onFocusLost("window blur"));
+window.addEventListener("focus", () => onFocusRegained());
+
+// ---- pre-stream countdown (req 3) -----------------------------------------
+const countdownEl = $("countdown");
+async function runCountdown(seconds) {
+  const numEl = $("cdNum");
+  countdownEl.classList.add("show");
+  log("Keep this tab in front -- do NOT switch windows. Streaming in 3..2..1", "t-warn");
+  for (let s = seconds; s >= 1; s--) {
+    numEl.textContent = String(s);
+    await sleep(1000);
+  }
+  countdownEl.classList.remove("show");
+}
+
+// ---- retrying sendReport for the hot loop (req 5) -------------------------
+// Up to WRITE_RETRIES attempts with WRITE_BACKOFF_MS backoff, catching transient
+// "Failed to write the report" DOMExceptions. Aborts immediately (throws) if the
+// device has disconnected rather than retrying forever.
+async function sendReportRetry(reportId, payload, chunkIndex) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= WRITE_RETRIES; attempt++) {
+    if (disconnected || !device) {
+      throw new Error("device disconnected mid-stream");
+    }
+    try {
+      await device.sendReport(reportId, payload);
+      if (attempt > 1) {
+        log(`  chunk ${chunkIndex}: write succeeded on attempt ${attempt}.`, "t-warn");
+      }
+      return;
+    } catch (err) {
+      lastErr = err;
+      if (disconnected || !device) {
+        throw new Error("device disconnected mid-stream");
+      }
+      log(`  chunk ${chunkIndex}: write attempt ${attempt}/${WRITE_RETRIES} failed: ${err.message}`, "t-warn");
+      if (attempt < WRITE_RETRIES) await sleep(WRITE_BACKOFF_MS);
+    }
+  }
+  throw lastErr || new Error("sendReport failed after retries");
+}
+
+// Send ENTER UPDATE exactly as the official tool does.
+async function sendEnterUpdate(target /* "headset" | "dongle" */) {
+  const payload = new Uint8Array(ENTER_LEN); // 63 bytes, all zero
+  payload[0] = REPORT_ENTER;                 // 0x55 -- report id duplicated as data byte 0
+  payload[1] = (target === "dongle") ? 0x00 : 0x01; // 0=dongle, 1=headset
+  log(`TX sendReport id=0x${hex2(REPORT_ENTER)} ENTER UPDATE target=${target} (${payload.length}B): ${hexDump(payload, 16)}`, "t-tx");
+  await device.sendReport(REPORT_ENTER, payload);
+}
+
+// Fallback: poll feature reports for a [02,01,00] READY signature. The official
+// tool does NOT do this; it's only a safety net for an unknown firmware variant.
+// Returns a {stop()} controller; calls onReady(id,u8) if it ever sees READY.
+function startFeaturePoll(onReady) {
+  let stopped = false;
+  (async () => {
+    while (!stopped) {
+      for (const rid of FEATURE_POLL_IDS) {
+        if (stopped) return;
+        try {
+          const dv = await device.receiveFeatureReport(rid);
+          const u8 = dvToU8(dv);
+          // receiveFeatureReport's DataView INCLUDES the reportId as byte 0 when
+          // the device uses numbered reports; handle both framings.
+          if (verbose()) log(`RX featureReport id=0x${hex2(rid)} (${u8.length}B): ${hexDump(u8, 16)}`, "t-rx");
+          // Look for READY signature with or without a leading reportId byte.
+          const m = matchReady(rid, u8);
+          if (m) { onReady(rid, u8); return; }
+        } catch (_) { /* report id not readable as feature -> ignore */ }
+      }
+      await sleep(FEATURE_POLL_INTERVAL_MS);
+    }
+  })();
+  return { stop() { stopped = true; } };
+}
+
+function matchReady(rid, u8) {
+  // canonical: payload [02,01,00]
+  if (u8.length >= 3 && u8[0] === 0x02 && u8[1] === 0x01 && u8[2] === 0x00) return true;
+  // with leading reportId byte (0x55) then [02,01,00]
+  if (u8.length >= 4 && u8[0] === REPORT_ENTER && u8[1] === 0x02 && u8[2] === 0x01 && u8[3] === 0x00) return true;
+  return false;
+}
+
+// Wait for READY: race the inputreport event (canonical) against the feature
+// poll (fallback) and a generous timeout.
+async function waitForReady(timeoutMs) {
+  let poll = null;
+  let timer = null;
+  try {
+    const evP = new Promise(resolve => { readyResolve = resolve; });
+    const pollP = new Promise(resolve => {
+      poll = startFeaturePoll((rid, u8) => {
+        log(`--> Device READY via FEATURE report id=0x${hex2(rid)}: ${hexDump(u8, 8)}`, "t-ok");
+        resolve(true);
+      });
+    });
+    const toP = new Promise(resolve => { timer = setTimeout(() => resolve(false), timeoutMs); });
+    const ok = await Promise.race([evP, pollP, toP]);
+    return ok === true;
+  } finally {
+    readyResolve = null;
+    if (poll) poll.stop();
+    if (timer) clearTimeout(timer);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Connect (official vid/pid filter; falls back to no-filter chooser)
+// ---------------------------------------------------------------------------
+async function doConnect() {
+  if (!("hid" in navigator)) { log("WebHID not available. Use Chrome or Edge over https:// or file://.", "t-err"); return false; }
+  try {
+    let devices = await navigator.hid.requestDevice({ filters: [{ vendorId: VID, productId: PID }] });
+    if (!devices.length) {
+      log("No device matched VID 0x291D / PID 0x385D. Re-opening chooser with no filter...", "t-warn");
+      devices = await navigator.hid.requestDevice({ filters: [] });
+    }
+    if (!devices.length) { log("No device selected.", "t-warn"); return false; }
+    device = devices[0];                 // official tool just uses devices[0]
+    listenerAttached = false;
+    if (!device.opened) await device.open();
+    attachInputHandler(device);          // listener MUST be attached before ENTER UPDATE
+    const vp = `VID 0x${device.vendorId.toString(16).padStart(4,"0")} PID 0x${device.productId.toString(16).padStart(4,"0")}`;
+    const match = (device.vendorId === VID && device.productId === PID) ? "" : '  <span class="t-warn">(does NOT match V9 Pro VID/PID!)</span>';
+    $("devInfo").innerHTML = `Connected: <b>${device.productName || "HID device"}</b> (${vp})${match}`;
+    log(`Connected to ${device.productName || "HID device"} (${vp}).`, "t-ok");
+    // Trace the device's HID collections so the user can sanity-check report IDs.
+    try {
+      for (const c of device.collections || []) {
+        const outs = (c.outputReports || []).map(r => "0x" + hex2(r.reportId)).join(",") || "-";
+        const ins  = (c.inputReports  || []).map(r => "0x" + hex2(r.reportId)).join(",") || "-";
+        const fts  = (c.featureReports|| []).map(r => "0x" + hex2(r.reportId)).join(",") || "-";
+        log(`  collection usagePage=0x${(c.usagePage||0).toString(16)} usage=0x${(c.usage||0).toString(16)}  out:[${outs}] in:[${ins}] feature:[${fts}]`, "t-dim");
+      }
+    } catch (_) {}
+    refreshFlashBtn();
+    return true;
+  } catch (err) {
+    log("Connect failed: " + err.message, "t-err");
+    return false;
+  }
+}
+$("btnConnect").addEventListener("click", () => { if (!busy) doConnect(); });
+
+// ---------------------------------------------------------------------------
+// File pick
+// ---------------------------------------------------------------------------
+$("file").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) { fwBytes = null; $("fileInfo").textContent = ""; refreshFlashBtn(); return; }
+  const buf = await f.arrayBuffer();
+  fwBytes = new Uint8Array(buf);
+  const magic = String.fromCharCode(...fwBytes.slice(0, 4));
+  const isAOTA = magic === "AOTA";
+  $("fileInfo").innerHTML =
+    `<b>${f.name}</b> &middot; ${fwBytes.length.toLocaleString()} bytes &middot; magic ` +
+    (isAOTA ? `<span class="t-ok">AOTA</span>` : `<span class="t-err">${magic} (not AOTA!)</span>`);
+  log(`Loaded ${f.name} (${fwBytes.length} bytes, magic="${magic}").`, isAOTA ? "t-dim" : "t-warn");
+  if (!isAOTA) log("Warning: file does not start with 'AOTA'. This may not be a valid headset image.", "t-warn");
+  refreshFlashBtn();
+});
+
+$("ackBox").addEventListener("change", refreshFlashBtn);
+$("btnClear").addEventListener("click", () => logEl.innerHTML = "");
+$("btnCopy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(logEl.textContent); log("Log copied to clipboard.", "t-dim"); }
+  catch (_) { log("Copy failed -- select the log text manually.", "t-warn"); }
+});
+
+function refreshFlashBtn() {
+  $("btnFlash").disabled = !(device && fwBytes && $("ackBox").checked && !busy);
+  $("btnConnect").disabled = busy;
+  $("btnDiag").disabled = busy;
+}
+
+function setProgress(done, total) {
+  const pct = total ? Math.floor(done * 100 / total) : 0;
+  $("prog").value = pct; $("pct").textContent = pct + "%";
+}
+
+// ---------------------------------------------------------------------------
+// DIAGNOSTIC: connect (if needed) + ENTER UPDATE + 15s sniff. No firmware sent.
+// ---------------------------------------------------------------------------
+$("btnDiag").addEventListener("click", async () => {
+  if (busy) return;
+  if (!device) { const ok = await doConnect(); if (!ok) return; }
+  busy = true; diagMode = true; refreshFlashBtn();
+  let poll = null;
+  const target = (document.querySelector('input[name="diagTarget"]:checked') || {}).value || "headset";
+  try {
+    log("=== DIAGNOSTIC START (no firmware will be sent) ===", "t-ok");
+    log("Make sure the headset is powered on and within 2.4G range of the dongle.", "t-warn");
+
+    // Send ENTER UPDATE exactly as the official tool does.
+    await sendEnterUpdate(target);
+
+    // Sniff: every input report is already logged by onInputReport (diagMode=true).
+    // In parallel, repeatedly sweep readable feature reports across candidate IDs.
+    log(`Listening for ${Math.round(DIAG_WINDOW_MS/1000)}s. Logging EVERY input report and sweeping feature reports...`, "t-dim");
+    let stopped = false;
+    poll = (async () => {
+      while (!stopped) {
+        for (const rid of FEATURE_POLL_IDS) {
+          if (stopped) return;
+          try {
+            const dv = await device.receiveFeatureReport(rid);
+            const u8 = dvToU8(dv);
+            log(`RX featureReport id=0x${hex2(rid)} (${u8.length}B): ${hexDump(u8, 16)}`, "t-rx");
+          } catch (_) { /* not a readable feature report id -> skip silently */ }
+        }
+        await sleep(FEATURE_POLL_INTERVAL_MS);
+      }
+    })();
+
+    await sleep(DIAG_WINDOW_MS);
+    stopped = true;
+    log("=== DIAGNOSTIC DONE. Copy the log above (Copy log) and report back what the device answered. ===", "t-ok");
+    log("If you saw 0x55 [02 01 00] -> the flash path is working; run FLASH with headset_noop.bin.", "t-dim");
+    log("If you saw NOTHING -> headset likely off / out of range, or wrong device picked.", "t-dim");
+  } catch (err) {
+    log("Diagnostic error: " + err.message, "t-err");
+  } finally {
+    diagMode = false; busy = false; refreshFlashBtn();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Flash (headset) -- exact official sequence
+// ---------------------------------------------------------------------------
+$("btnFlash").addEventListener("click", async () => {
+  if (busy || !device || !fwBytes) return;
+  busy = true; paused = false; disconnected = false; refreshFlashBtn();
+  await acquireWakeLock();            // req 1: keep the screen on for the whole flash
+  try {
+    log("=== FLASH START (target=headset) ===", "t-ok");
+
+    // 1) ENTER UPDATE (report 0x55, payload[0]=0x55, payload[1]=1). Listener is
+    //    already attached from connect, so the READY reply can't be missed.
+    await sendEnterUpdate("headset");
+
+    // 2) Wait for READY [02,01,00] (event listener canonical; feature poll fallback).
+    log(`Waiting up to ${Math.round(READY_TIMEOUT_MS/1000)}s for READY [02 01 00]...`, "t-dim");
+    const ready = await waitForReady(READY_TIMEOUT_MS);
+    if (disconnected) { log("=== Aborted: device disconnected before READY. NOTHING was flashed. ===", "t-err"); return; }
+    if (!ready) {
+      log("=== initFail: no READY [02 01 00] within timeout. NOTHING was flashed. ===", "t-err");
+      log("Likely causes: headset off / out of 2.4G range, or wrong HID device picked. Run DIAGNOSTIC.", "t-warn");
+      return;
+    }
+    log("initSuccess: device is in update mode.", "t-ok");
+
+    // 3) Arm the result waiter BEFORE streaming so a fast device can't race us.
+    const resultP = new Promise(resolve => { resultResolve = resolve; });
+
+    // req 3: prominent on-page instruction + 3s countdown so the user keeps focus.
+    await runCountdown(3);
+    // If the user already switched away during the countdown, warn now.
+    if (document.visibilityState === "hidden") onFocusLost("tab hidden / minimized");
+
+    // 4) Stream the WHOLE image in 63-byte chunks on report 0x41, back-to-back,
+    //    throttled only by device pause flow-control. Final chunk zero-padded.
+    //    TIGHT async loop: each sendReport is awaited with NO setTimeout/sleep in
+    //    the hot path (timers throttle in the background; awaited microtasks do not).
+    flashing = true;                  // arm focus guard + disconnect abort for the stream
+    const total = fwBytes.length;
+    const nChunks = Math.ceil(total / CHUNK);
+    log(`Streaming ${total} bytes in ${nChunks} chunks of ${CHUNK} (report 0x${hex2(REPORT_DATA)}). Keep this tab in front.`, "t-dim");
+    if (verbose()) log(`TX first chunk id=0x${hex2(REPORT_DATA)} 1/${nChunks}: (streaming...)`, "t-tx");
+
+    let sent = 0;
+    let aborted = false;
+    for (let i = 0; i < nChunks; i++) {
+      // Honor device-driven flow control FIRST: block here until RESUME if paused.
+      if (paused) {
+        log("Paused by device flow control; waiting for RESUME...", "t-warn");
+        await new Promise(resolve => { resumeResolve = resolve; });
+      }
+      if (disconnected || !device) { aborted = true; break; }
+
+      const start = i * CHUNK;
+      const end = Math.min(start + CHUNK, total);
+      const slice = fwBytes.subarray(start, end);
+      let payload;
+      if (slice.length === CHUNK) { payload = slice; }
+      else { payload = new Uint8Array(CHUNK); payload.set(slice, 0); } // zero-pad final chunk
+
+      try {
+        await sendReportRetry(REPORT_DATA, payload, i + 1);   // req 5: retry transient write failures
+      } catch (err) {
+        aborted = true;
+        log(`=== Stream aborted at chunk ${i+1}/${nChunks}: ${err.message}. Do NOT unplug; reconnect and re-flash stock. ===`, "t-err");
+        break;
+      }
+      sent += slice.length;
+
+      // req 6: log progress only every LOG_EVERY chunks (+ first + last); update bar each iter.
+      if (i === 0 || i === nChunks - 1 || ((i + 1) % LOG_EVERY) === 0) {
+        log(`  streamed chunk ${i+1}/${nChunks} (${sent}/${total} bytes)`, "t-dim");
+      }
+      setProgress(sent, total);
+    }
+
+    if (aborted) return;
+    setProgress(total, total);
+    log(`All ${nChunks} chunks sent (${sent} bytes). Waiting up to ${Math.round(RESULT_TIMEOUT_MS/1000)}s for verify...`, "t-dim");
+
+    // 5) Wait for the final result [01,01,00]/[01,00,00].
+    const resultTO = new Promise(resolve => setTimeout(() => resolve(null), RESULT_TIMEOUT_MS));
+    const ok = await Promise.race([resultP, resultTO]);
+    resultResolve = null;
+    if (ok === true)       log("=== FLASH COMPLETE: device reported SUCCESS [01 01 00]. You may unplug now. ===", "t-ok");
+    else if (ok === false) log("=== FLASH FAILED: device reported FAIL [01 00 00]. Re-flash headset_noop.bin / stock. ===", "t-err");
+    else                   log("=== No result within timeout. Do NOT unplug yet; check the log / re-run DIAGNOSTIC. ===", "t-warn");
+  } catch (err) {
+    log("Flash error: " + err.message + " -- do NOT unplug; retry, then re-flash stock if needed.", "t-err");
+  } finally {
+    flashing = false;
+    hideFocusBanner();
+    countdownEl.classList.remove("show");
+    await releaseWakeLock();           // req 1: release on finish
+    resultResolve = null; resumeResolve = null;
+    busy = false; refreshFlashBtn();
+  }
+});
+
+// surface disconnects -- if the device drops mid-flash, flag it so the hot loop
+// (sendReportRetry) aborts cleanly instead of retrying forever (req 5 + req 8).
+navigator.hid && navigator.hid.addEventListener("disconnect", (e) => {
+  if (device && e.device === device) {
+    disconnected = true;
+    if (flashing) {
+      log("*** Device DISCONNECTED mid-flash! Stream aborted. Do NOT unplug; reconnect and re-flash " +
+          "headset_noop.bin / stock to recover. ***", "t-err");
+    } else {
+      log("Device disconnected.", busy ? "t-err" : "t-warn");
+    }
+    // resolve any pending waits so the flash routine unwinds promptly
+    if (readyResolve) { const r = readyResolve; readyResolve = null; r(false); }
+    if (resultResolve) { const r = resultResolve; resultResolve = null; r(false); }
+    if (resumeResolve) { const r = resumeResolve; resumeResolve = null; r(); }
+    device = null; listenerAttached = false; $("devInfo").textContent = "No device.";
+    refreshFlashBtn();
+  }
+});
+
+log("Ready. Click DIAGNOSTIC if unsure, otherwise: Connect -> pick headset_noop.bin -> ack -> FLASH.", "t-dim");
+</script>
+</body>
+</html>

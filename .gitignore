@@ -1,0 +1,4 @@
+# never commit MCHOSE firmware images or build outputs
+*.bin
+__pycache__/
+*.pyc
