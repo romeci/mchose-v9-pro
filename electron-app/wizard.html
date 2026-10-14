@@ -115,8 +115,8 @@ if(S.tab===4){p.innerHTML=`<div class="panel warn"><h3>4. Flash de validação �
 <li><b>Passo 4:</b> clique <b>FLASH noop</b>. Espere <code>SUCCESS [01 01 00]</code>. Não troque de janela.</li>
 <li><b>Passo 5:</b> <b>Avançar</b> libera só após o SUCCESS.</li>
 </ol>
-<label class="chk"><input type="checkbox" id="ack" ${S.connected||S.diagOk||S.noopOk?"checked disabled":""} onchange="onAck(this.checked)" /> Li os avisos, headset ligado e próximo, dongle firme</label>
-<div class="row"><button class="primary" id="bConn" onclick="doConnect()" ${ackChecked()?"":"disabled"}>1. Conectar dongle</button><span id="devInfo" class="kv">${S.connected?"Conectado: <b>MCHOSE V9 PRO</b>":"Nenhum dispositivo."}</span></div>
+<label class="chk"><input type="checkbox" id="ack" ${ackChecked()?"checked":""} onchange="onAck(this.checked)" /> Li os avisos, headset ligado e próximo, dongle firme</label>
+<div class="row"><button class="primary" id="bConn" onclick="doConnect()" ${S.connected?"":"disabled"}>1. Conectar dongle</button><span id="devInfo" class="kv">${S.connected?"Conectado: <b>MCHOSE V9 PRO</b>":"Nenhum dispositivo."}</span></div>
 <div class="row"><button class="ghost" id="bDiag" onclick="doDiag()" ${S.connected&&!busy?"":"disabled"}>2. Diagnóstico 15s ${S.diagOk?"✓":""}</button><button class="danger" id="bNoop" onclick="doFlash('noop')" ${S.diagOk&&!busy?"":"disabled"}>3. FLASH noop ${S.noopOk?"✓ SUCCESS":""}</button><button id="bAdv4" onclick="go(5)" ${S.noopOk?"":"disabled"}>4. Avançar</button></div></div>`;}
 if(S.tab===5){p.innerHTML=`<div class="panel"><h3>5. Flash silenciado (o flash real)</h3>
 <ol class="dim" style="padding-left:20px;margin:0 0 8px">
@@ -201,7 +201,7 @@ try{
 try{
 const known=await navigator.hid.getDevices();
 const prev=(known||[]).find(d=>d.vendorId===VID&&d.productId===PID)||null;
-if(prev){S.device=prev;if(!S.device.opened)await S.device.open();S.device.addEventListener("inputreport",onReport);
+if(prev){S.device=prev;S.connected=true;if(!S.device.opened)await S.device.open();S.device.addEventListener("inputreport",onReport);
 const vp0="VID 0x"+S.device.vendorId.toString(16)+" PID 0x"+S.device.productId.toString(16);
 if($("devInfo"))$("devInfo").innerHTML="Conectado: <b>"+(S.device.productName||"HID")+"</b> ("+vp0+")";
 log("Conectado (autorização anterior): "+(S.device.productName||"HID")+" ("+vp0+")","t-ok");return true;}
@@ -218,7 +218,7 @@ if($("devInfo"))$("devInfo").innerHTML="Conectado: <b>"+(S.device.productName||"
 log("Conectado: "+(S.device.productName||"HID")+" ("+vp+")","t-ok");
 return true;
 }catch(e){log("Connect falhou: "+e.message,"t-err");return false;}
-finally{if(S.tab===4)render();}
+finally{refreshStep4();}
 }
 async function sendEnter(){const p=new Uint8Array(63);p[0]=R_ENTER;p[1]=0x01;log("TX ENTER UPDATE (headset)","t-tx");await S.device.sendReport(R_ENTER,p);}
 async function waitReady(ms){return new Promise(res=>{let done=false;readyRes=v=>{if(!done){done=true;res(v);}};setTimeout(()=>{if(!done){done=true;readyRes=null;res(false);}},ms);});}
@@ -263,7 +263,7 @@ if(ok===true){log("=== FLASH COMPLETO: SUCCESS ===","t-ok");if(kind==="noop")S.n
 else if(ok===false)log("=== FAIL do device. Reflasheie noop/stock. ===","t-err");
 else log("=== Sem resultado no timeout. Não desplugue; rode Diagnóstico. ===","t-warn");
 }catch(e){log("Erro no flash: "+e.message,"t-err");}
-finally{flashing=false;busy=false;$("countdown").classList.remove("show");render();}
+finally{flashing=false;busy=false;$("countdown").classList.remove("show");refreshStep4();}
 }
 async function doDiag(){
 if(busy)return;
@@ -271,7 +271,7 @@ if(!S.device){const ok=await doConnect();if(!ok)return;}
 busy=true;diagMode=true;
 try{log("=== DIAGNÓSTICO 15s (sem firmware) ===","t-ok");await sendEnter();await sleep(15000);S.diagOk=true;log("=== DIAGNÓSTICO FIM: headset respondeu. Diagnóstico OK — FLASH noop liberado. ===","t-ok");}
 catch(e){log("Diag erro: "+e.message,"t-err");}
-finally{diagMode=false;busy=false;if(S.tab===4)render();}
+finally{diagMode=false;busy=false;refreshStep4();}
 }
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"&&flashing){$("focusBanner").textContent="JANELA PERDEU O FOCO — O FLASH VAI TRAVAR! Volte agora.";$("focusBanner").classList.add("show");log("Foco perdido durante flash! Volte agora.","t-err");}else{$("focusBanner").classList.remove("show");}});
 window.go=go;window.loadStock=loadStock;window.doList=doList;window.doBuild=doBuild;
@@ -280,9 +280,11 @@ window.onAck=onAck;
 window.copyLog=copyLog;window.saveLog=saveLog;window.finishTests=finishTests;
 function showHidList(list){if(!list||!list.length){log("HIDs visíveis: (nenhum) — Windows não expôs nenhum HID ao app.","t-err");return;}
 log("HIDs visíveis: "+list.map(d=>((d.name||"HID")+" VID 0x"+(d.vendorId||0).toString(16)+" PID 0x"+(d.productId||0).toString(16))).join(" | "),"t-dim");}
-let _ack=(S.connected||S.diagOk||S.noopOk);
-function ackChecked(){return _ack||($("ack")&&$("ack").checked);}
-function onAck(v){_ack=v;const b=$("bConn");if(b)b.disabled=!v;}
+let _ack=false;
+function ackChecked(){return _ack;}
+function onAck(v){_ack=v;const b=$("bConn");if(b)b.disabled=!v;refreshStep4();}
+function refreshStep4(){if(S.tab!==4)return;const d=$("bDiag"),n=$("bNoop"),a=$("bAdv4");
+if(d)d.disabled=!(S.connected&&!busy);if(n)n.disabled=!(S.diagOk&&!busy);if(a)a.disabled=!S.noopOk;}
 (async()=>{try{S.platform=await window.mchose.getPlatform();}catch(e){}try{if(window.mchose.onHidList)window.mchose.onHidList(showHidList);}catch(e){}renderSteps();render();
 if(S.platform!=="win32")log("Plataforma "+S.platform+": gerar imagens OK aqui; o flash exige Windows.","t-warn");
 else log("Pronto. Etapa 1: carregue o firmware embutido.","t-dim");})();
