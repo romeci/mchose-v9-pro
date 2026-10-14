@@ -111,13 +111,13 @@ if(S.tab===4){p.innerHTML=`<div class="panel warn"><h3>4. Flash de validação �
 <ol class="dim" style="padding-left:20px;margin:0 0 8px">
 <li><b>Passo 1:</b> marque a confirmação abaixo (headset ligado, perto, dongle firme).</li>
 <li><b>Passo 2:</b> clique <b>Conectar dongle</b>. Espere <code>Conectado: MCHOSE V9 PRO</code>.</li>
-<li><b>Passo 3:</b> clique <b>Diagnóstico 15s</b>. Espere <code>RX input id=0x55</code> (prova que o headset responde). O LED pode apagar — é o modo update, normal.</li>
-<li><b>Passo 4:</b> clique <b>FLASH noop</b>. Espere <code>SUCCESS [01 01 00]</code>. Não troque de janela.</li>
+<li><b>Passo 3 (opcional):</b> <b>Diagnóstico 15s</b> só se o flash falhar. Ele coloca o headset em update e <b>desliga no final (voz "disconnected") — normal. Reliğue o headset depois.</b></li>
+<li><b>Passo 4:</b> clique <b>FLASH noop</b> com o headset <b>ligado</b>. Espere <code>SUCCESS [01 01 00]</code>. Não troque de janela.</li>
 <li><b>Passo 5:</b> <b>Avançar</b> libera só após o SUCCESS.</li>
 </ol>
 <label class="chk"><input type="checkbox" id="ack" ${ackChecked()?"checked":""} onchange="onAck(this.checked)" /> Li os avisos, headset ligado e próximo, dongle firme</label>
 <div class="row"><button class="primary" id="bConn" onclick="doConnect()" ${S.connected?"":"disabled"}>1. Conectar dongle</button><span id="devInfo" class="kv">${S.connected?"Conectado: <b>MCHOSE V9 PRO</b>":"Nenhum dispositivo."}</span></div>
-<div class="row"><button class="ghost" id="bDiag" onclick="doDiag()" ${S.connected&&!busy?"":"disabled"}>2. Diagnóstico 15s ${S.diagOk?"✓":""}</button><button class="danger" id="bNoop" onclick="doFlash('noop')" ${S.diagOk&&!busy?"":"disabled"}>3. FLASH noop ${S.noopOk?"✓ SUCCESS":""}</button><button id="bAdv4" onclick="go(5)" ${S.noopOk?"":"disabled"}>4. Avançar</button></div></div>`;}
+<div class="row"><button class="ghost" id="bDiag" onclick="doDiag()" ${S.connected&&!busy?"":"disabled"}>2. Diagnóstico 15s (opcional)</button><button class="danger" id="bNoop" onclick="doFlash('noop')" ${S.connected&&!busy?"":"disabled"}>3. FLASH noop ${S.noopOk?"✓ SUCCESS":""}</button><button id="bAdv4" onclick="go(5)" ${S.noopOk?"":"disabled"}>4. Avançar</button></div></div>`;}
 if(S.tab===5){p.innerHTML=`<div class="panel"><h3>5. Flash silenciado (o flash real)</h3>
 <ol class="dim" style="padding-left:20px;margin:0 0 8px">
 <li><b>Passo 1:</b> confirme que o noop deu <code>SUCCESS</code> (etapa anterior).</li>
@@ -225,7 +225,7 @@ async function waitReady(ms){return new Promise(res=>{let done=false;readyRes=v=
 function fwFor(kind){return kind==="noop"?S.noop:kind==="silenced"?S.silenced:S.stock;}
 async function doFlash(kind){
 if(busy)return;
-if(kind==="noop"){if(!S.diagOk){alert("Rode o Diagnóstico 15s primeiro.");return;}}
+if(kind==="noop"){if(!S.connected){alert("Conecte o dongle primeiro.");return;}}
 if(kind==="silenced"){if(!S.noopOk){alert("O noop precisa de SUCCESS antes do flash real.");return;}}
 if(!S.device){const ok=await doConnect();if(!ok)return;}
 const fw=fwFor(kind);if(!fw){log("Nada para flashear (gere na etapa 3).","t-err");return;}
@@ -284,7 +284,7 @@ let _ack=false;
 function ackChecked(){return _ack;}
 function onAck(v){_ack=v;const b=$("bConn");if(b)b.disabled=!v;refreshStep4();}
 function refreshStep4(){if(S.tab!==4)return;const d=$("bDiag"),n=$("bNoop"),a=$("bAdv4");
-if(d)d.disabled=!(S.connected&&!busy);if(n)n.disabled=!(S.diagOk&&!busy);if(a)a.disabled=!S.noopOk;}
+if(d)d.disabled=!(S.connected&&!busy);if(n)n.disabled=!(S.connected&&!busy);if(a)a.disabled=!S.noopOk;}
 (async()=>{try{S.platform=await window.mchose.getPlatform();}catch(e){}try{if(window.mchose.onHidList)window.mchose.onHidList(showHidList);}catch(e){}renderSteps();render();
 if(S.platform!=="win32")log("Plataforma "+S.platform+": gerar imagens OK aqui; o flash exige Windows.","t-warn");
 else log("Pronto. Etapa 1: carregue o firmware embutido.","t-dim");})();
