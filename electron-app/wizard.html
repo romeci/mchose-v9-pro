@@ -111,13 +111,13 @@ if(S.tab===4){p.innerHTML=`<div class="panel warn"><h3>4. Flash de validação �
 <ol class="dim" style="padding-left:20px;margin:0 0 8px">
 <li><b>Passo 1:</b> marque a confirmação abaixo (headset ligado, perto, dongle firme).</li>
 <li><b>Passo 2:</b> clique <b>Conectar dongle</b>. Espere <code>Conectado: MCHOSE V9 PRO</code>.</li>
-<li><b>Passo 3 (opcional):</b> <b>Diagnóstico 15s</b> só se o flash falhar. Ele coloca o headset em update e <b>desliga no final (voz "disconnected") — normal. Reliğue o headset depois.</b></li>
-<li><b>Passo 4:</b> clique <b>FLASH noop</b> com o headset <b>ligado</b>. Espere <code>SUCCESS [01 01 00]</code>. Não troque de janela.</li>
-<li><b>Passo 5:</b> <b>Avançar</b> libera só após o SUCCESS.</li>
+<li><b>Passo 3:</b> clique <b>FLASH noop</b> com o headset <b>ligado</b>. Espere <code>SUCCESS [01 01 00]</code>. Não troque de janela.</li>
+<li><b>Passo 4:</b> <b>Avançar</b> libera só após o SUCCESS.</li>
 </ol>
 <label class="chk"><input type="checkbox" id="ack" ${ackChecked()?"checked":""} onchange="onAck(this.checked)" /> Li os avisos, headset ligado e próximo, dongle firme</label>
 <div class="row"><button class="primary" id="bConn" onclick="doConnect()" ${S.connected?"":"disabled"}>1. Conectar dongle</button><span id="devInfo" class="kv">${S.connected?"Conectado: <b>MCHOSE V9 PRO</b>":"Nenhum dispositivo."}</span></div>
-<div class="row"><button class="ghost" id="bDiag" onclick="doDiag()" ${S.connected&&!busy?"":"disabled"}>2. Diagnóstico 15s (opcional)</button><button class="danger" id="bNoop" onclick="doFlash('noop')" ${S.connected&&!busy?"":"disabled"}>3. FLASH noop ${S.noopOk?"✓ SUCCESS":""}</button><button id="bAdv4" onclick="go(5)" ${S.noopOk?"":"disabled"}>4. Avançar</button></div></div>`;}
+<div class="row"><button class="danger" id="bNoop" onclick="doFlash('noop')" ${S.connected&&!busy?"":"disabled"}>2. FLASH noop ${S.noopOk?"✓ SUCCESS":""}</button><button id="bAdv4" onclick="go(5)" ${S.noopOk?"":"disabled"}>3. Avançar</button></div>
+<div class="panel" style="margin-top:12px;border-style:dashed"><b class="dim">Ferramenta separada — Diagnóstico 15s (OPCIONAL)</b><br><small class="dim">Só use se o flash falhar sem READY. Não faz parte do fluxo: coloca o headset em update e <b>desliga no final (voz "disconnected") — religue depois</b>. Não precisa rodar para liberar nada.</small><br><button class="ghost" id="bDiag" onclick="doDiag()" ${S.connected&&!busy?"":"disabled"}>Rodar diagnóstico (opcional)</button></div></div>`;}
 if(S.tab===5){p.innerHTML=`<div class="panel"><h3>5. Flash silenciado (o flash real)</h3>
 <ol class="dim" style="padding-left:20px;margin:0 0 8px">
 <li><b>Passo 1:</b> confirme que o noop deu <code>SUCCESS</code> (etapa anterior).</li>
