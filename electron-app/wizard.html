@@ -185,12 +185,20 @@ if(id===R_ENTER&&n0===0x01&&n2===0x00&&(n1===0x01||n1===0x00)){const ok=n1===0x0
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function doConnect(){
 if(!("hid" in navigator)){log("WebHID indisponível. Rode no Windows.","t-err");return false;}
-log("Abrindo seletor de dispositivo... selecione o dongle MCHOSE e clique em Conectar/Connect.","t-warn");
-log("Se a lista vier vazia: desplugue/plugue o dongle, feche o app oficial MCHOSE e tente de novo.","t-dim");
+log("Procurando dongle MCHOSE (seleção automática, sem lista manual)...","t-dim");
 try{
+// 1) já autorizado antes? abre direto, sem picker
+try{
+const known=await navigator.hid.getDevices();
+const prev=(known||[]).find(d=>d.vendorId===VID&&d.productId===PID)||null;
+if(prev){S.device=prev;if(!S.device.opened)await S.device.open();S.device.addEventListener("inputreport",onReport);
+const vp0="VID 0x"+S.device.vendorId.toString(16)+" PID 0x"+S.device.productId.toString(16);
+if($("devInfo"))$("devInfo").innerHTML="Conectado: <b>"+(S.device.productName||"HID")+"</b> ("+vp0+")";
+log("Conectado (autorização anterior): "+(S.device.productName||"HID")+" ("+vp0+")","t-ok");return true;}
+}catch(e0){log("getDevices: "+e0.message,"t-dim");}
 let devs=await navigator.hid.requestDevice({filters:[{vendorId:VID,productId:PID}]});
-if(!devs.length){log("Filtro VID 0x291D/PID 0x385D não retornou nada. Abrindo lista completa — escolha o HID do dongle (MCHOSE).","t-warn");try{devs=await navigator.hid.requestDevice({filters:[]});}catch(e2){log("Seletor fechado sem escolha: "+e2.message,"t-warn");return false;}}
-if(!devs.length){log("NENHUM dispositivo escolhido. Passos: 1) dongle plugado direto no PC (sem hub) 2) headset ligado e perto 3) fechar app MCHOSE 4) clicar Conectar e ESCOLHER o item da lista.","t-err");return false;}
+if(!devs.length){log("Filtro VID 0x291D/PID 0x385D não retornou nada. Tentando lista completa...","t-warn");try{devs=await navigator.hid.requestDevice({filters:[]});}catch(e2){log("Seleção cancelada: "+e2.message,"t-warn");return false;}}
+if(!devs.length){log("NENHUM HID visível para o app. Passos: 1) dongle direto no PC (sem hub) 2) headset ligado e perto 3) fechar app oficial MCHOSE 4) desplugar/plugar o dongle e clicar Conectar de novo.","t-err");return false;}
 S.device=devs[0];
 if(!S.device.opened)await S.device.open();
 S.device.addEventListener("inputreport",onReport);
@@ -256,7 +264,9 @@ document.addEventListener("visibilitychange",()=>{if(document.visibilityState===
 window.go=go;window.loadStock=loadStock;window.doList=doList;window.doBuild=doBuild;
 window.doConnect=doConnect;window.doFlash=doFlash;window.doDiag=doDiag;
 window.copyLog=copyLog;window.saveLog=saveLog;window.finishTests=finishTests;
-(async()=>{try{S.platform=await window.mchose.getPlatform();}catch(e){}renderSteps();render();
+function showHidList(list){if(!list||!list.length){log("HIDs visíveis: (nenhum) — Windows não expôs nenhum HID ao app.","t-err");return;}
+log("HIDs visíveis: "+list.map(d=>((d.name||"HID")+" VID 0x"+(d.vendorId||0).toString(16)+" PID 0x"+(d.productId||0).toString(16))).join(" | "),"t-dim");}
+(async()=>{try{S.platform=await window.mchose.getPlatform();}catch(e){}try{if(window.mchose.onHidList)window.mchose.onHidList(showHidList);}catch(e){}renderSteps();render();
 if(S.platform!=="win32")log("Plataforma "+S.platform+": gerar imagens OK aqui; o flash exige Windows.","t-warn");
 else log("Pronto. Etapa 1: carregue o firmware embutido.","t-dim");})();
 </script>

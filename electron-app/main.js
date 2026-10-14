@@ -32,6 +32,20 @@ app.whenReady().then(() => {
       return false;
     });
   } catch (_) {}
+  // OBRIGATÓRIO: sem este handler o requestDevice() sempre resolve [] no Electron
+  // (não há picker nativo automático). Seleciona o dongle MCHOSE sozinho.
+  ses.on('select-hid-device', (event, details, callback) => {
+    event.preventDefault();
+    const list = (details && details.deviceList) || [];
+    try {
+      win && win.webContents.send('hid-list', list.map(d => ({name: d.name, vendorId: d.vendorId, productId: d.productId})));
+    } catch (_) {}
+    const match = list.find(d => d.vendorId === 0x291D && d.productId === 0x385D) || list[0];
+    try {
+      if (match) callback(match.deviceId);
+      else callback('');
+    } catch (_) {}
+  });
   try {
     ses.setPermissionCheckHandler((wc, permission) => permission === 'hid' ? true : undefined);
   } catch (_) {}
