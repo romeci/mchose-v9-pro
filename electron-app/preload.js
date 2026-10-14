@@ -1,0 +1,5 @@
+const {contextBridge, ipcRenderer} = require('electron');
+contextBridge.exposeInMainWorld('mchose', {
+  getPlatform: () => ipcRenderer.invoke('get-platform'),
+  exportFile: (name, b64) => ipcRenderer.invoke('export-file', name, b64),
+});

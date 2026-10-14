@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MCHOSE V9 Pro — Assistente Portátil</title>
+<script src="assets/firmware.js"></script>
+<script src="assets/firmware_stock_EN.b64.js"></script>
+<script src="assets/firmware_stock_CN.b64.js"></script>
+<style>
+:root{--bg:#0e1116;--panel:#161b22;--fg:#e6edf3;--mut:#8b949e;--acc:#2f81f7;--ok:#3fb950;--warn:#d29922;--err:#f85149;--line:#30363d}
+*{box-sizing:border-box}body{margin:0;font:14px/1.5 -apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--fg);display:flex;height:100vh}
+#side{width:280px;background:#0a0d12;border-right:1px solid var(--line);padding:16px;overflow:auto;flex-shrink:0}
+#side h2{font-size:13px;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+.step{padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;cursor:pointer;background:var(--panel)}
+.step.active{border-color:var(--acc)} .step.done{border-color:var(--ok)}
+.step .n{font-weight:700;margin-right:6px} .step small{display:block;color:var(--mut)}
+#main{flex:1;padding:20px;overflow:auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+.warn{border-color:var(--warn);background:#1d1a0e}.warn h3{color:var(--warn);margin:0 0 8px}
+.ok{color:var(--ok)}.bad{color:var(--err)}.dim{color:var(--mut)}
+button{font:inherit;padding:9px 16px;border-radius:8px;border:1px solid var(--line);background:#21262d;color:var(--fg);cursor:pointer;margin:4px 6px 4px 0}
+button:hover:not(:disabled){border-color:var(--acc)}button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+button.danger{background:var(--err);border-color:var(--err);color:#fff}
+button.ghost{background:transparent}
+progress{width:100%;height:18px}
+#log{background:#0a0d12;border:1px solid var(--line);border-radius:8px;padding:10px;height:200px;overflow:auto;font-family:Consolas,monospace;font-size:12px;white-space:pre-wrap}
+.t-ok{color:var(--ok)}.t-err{color:var(--err)}.t-warn{color:var(--warn)}.t-dim{color:var(--mut)}.t-tx{color:#79c0ff}.t-rx{color:#d2a8ff}
+code{background:#0a0d12;padding:1px 5px;border-radius:4px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.kv{color:var(--mut)}.kv b{color:var(--fg)}
+#focusBanner{display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--err);color:#fff;font-weight:700;text-align:center;padding:12px;font-size:15px}
+#focusBanner.show{display:block}
+#countdown{display:none;position:fixed;inset:0;z-index:9998;background:rgba(8,10,14,.93);flex-direction:column;align-items:center;justify-content:center;text-align:center}
+#countdown.show{display:flex}
+#countdown .n{font-size:96px;font-weight:800;color:var(--acc)}
+table{border-collapse:collapse;width:100%}td,th{border:1px solid var(--line);padding:6px 8px;text-align:left;font-size:13px}
+input[type=text]{background:#0a0d12;border:1px solid var(--line);color:var(--fg);border-radius:6px;padding:8px;width:110px}
+label.chk{display:block;margin:7px 0}
+select{background:#0a0d12;border:1px solid var(--line);color:var(--fg);border-radius:6px;padding:8px}
+pre.out{background:#0a0d12;border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;max-height:240px;overflow:auto;font-size:12px}
+</style>
+</head>
+<body>
+<div id="focusBanner"></div>
+<div id="countdown"><div style="font-size:22px;font-weight:700;color:var(--warn)">MANTENHA ESTA JANELA EM PRIMEIRO PLANO</div><div class="dim">Não troque de janela. O flash trava em segundo plano e o headset aborta em ~10s.</div><div class="n" id="cdNum">3</div></div>
+<div id="side">
+<h2>MCHOSE V9 Pro — Passo a passo</h2>
+<div id="steps"></div>
+<div class="panel" style="margin-top:12px"><b class="dim">Restaurar fábrica</b><br><small class="dim">Volta ao original a qualquer momento.</small><br><button class="ghost" onclick="go(7)">Abrir restauração</button></div>
+</div>
+<div id="main">
+<h1 style="margin:0 0 4px">MCHOSE V9 Pro — Assistente portátil</h1>
+<p class="dim" style="margin:0 0 14px">Sem instalação, sem Python, sem download, sem selecionar arquivo. Firmware oficial EN + CN já embutidos. Siga as etapas na ordem.</p>
+<div id="page"></div>
+<div class="panel"><div class="row" style="justify-content:space-between;margin:0 0 6px"><b>Log</b><span><button class="ghost" onclick="copyLog()">Copiar</button><button class="ghost" onclick="document.getElementById('log').innerHTML=''">Limpar</button><button class="ghost" onclick="saveLog()">Salvar log</button></span></div><div id="log"></div>
+<div class="row"><progress id="prog" value="0" max="100"></progress><span id="pct" class="kv" style="min-width:52px;text-align:right">0%</span></div>
+</div>
+</div>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+function ts(){const d=new Date();return d.toLocaleTimeString()+"."+String(d.getMilliseconds()).padStart(3,"0");}
+function log(m,c){const e=document.createElement("div");if(c)e.className=c;e.textContent="["+ts()+"] "+m;$("log").appendChild(e);$("log").scrollTop=$("log").scrollHeight;}
+function copyLog(){navigator.clipboard.writeText($("log").textContent).then(()=>log("Log copiado.","t-dim"));}
+async function saveLog(){const b=btoa(unescape(encodeURIComponent($("log").textContent)));await window.mchose.exportFile("mchose_log.txt",b);}
+function b64ToU8(b){const s=atob(b);const u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u;}
+function u8ToB64(u){let s="";for(let i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return btoa(s);}
+async function sha256hex(u8){const d=await crypto.subtle.digest("SHA-256",u8);return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,"0")).join("");}
+
+const S={tab:0,platform:"?",fwLang:"EN",stock:null,stockSha:"",listText:"",variant:null,noop:null,silenced:null,noopSha:"",silSha:"",validated:false,device:null,clips:[8,9]};
+const STOCK={
+ EN:{b64:()=>window.FIRMWARE_STOCK_EN_B64,ver:"1015",name:"V9Pro_headset_EN_1015_stock.bin",sha:"4893aba8c1b8b6007c7bc4a6a7d5b4c449787773a4b720313e23e87eb4dc290b"},
+ CN:{b64:()=>window.FIRMWARE_STOCK_CN_B64,ver:"0036",name:"V9Pro_headset_CN_0036_stock.bin",sha:"24f6b9a30d3418e789dc56d1a1ad0944cb6493f8dbb203756b4cc32c1f182c62"}
+};
+const TITLES=["0. Segurança","1. Firmware original","2. Inspecionar clips","3. Gerar imagens","4. Flash validação","5. Flash silenciado","6. Testes","7. Restaurar fábrica"];
+const DESCS=["Regras que evitam brick","EN/CN embutidos, hash OK","Listar sem alterar","noop + silenciado aqui dentro","Prova o caminho","O flash real","Checklist final","Volta ao original"];
+function renderSteps(){$("steps").innerHTML="";TITLES.forEach((t,i)=>{const d=document.createElement("div");d.className="step"+(i===S.tab?" active":"")+((i===1&&S.stock)||(i===3&&S.validated)?" done":"");d.innerHTML="<span class='n'>"+(i+1)+"</span>"+t+"<small>"+DESCS[i]+"</small>";d.onclick=()=>go(i);$("steps").appendChild(d);});}
+function go(i){S.tab=i;renderSteps();render();}
+function setProg(d,t){const p=t?Math.floor(d*100/t):0;$("prog").value=p;$("pct").textContent=p+"%";}
+
+async function render(){
+const p=$("page");
+if(S.tab===0){p.innerHTML=`<div class="panel warn"><h3>LEIA ANTES DE TUDO</h3><ul>
+<li><b>O firmware original já vem embutido</b> (EN v1015 + CN v0036, hashes oficiais verificados). Você não baixa nem seleciona nada.</li>
+<li>Ordem obrigatória: <b>flash noop primeiro</b> (validação), depois <b>silenciado</b>.</li>
+<li>Flash exige <b>Windows + dongle 2.4G</b> (WebHID). Gerar os .bin funciona em qualquer SO.</li>
+<li>Headset <b>ligado, perto do PC, bateria carregada</b>. Dongle firme, sem hub.</li>
+<li>Janela <b>sempre em primeiro plano</b> durante o flash. Segundo plano = throttle = aborta em ~10s.</li>
+<li>Flash parcial é <b>descartado pelo headset</b> (volta ao stock). Basta reflashear limpo.</li>
+<li>Restauração de fábrica disponível a qualquer momento (etapa 8).</li>
+</ul><button class="primary" onclick="go(1)">Entendi, começar</button></div>`;}
+if(S.tab===1){p.innerHTML=`<div class="panel"><h3>1. Firmware original (já embutido)</h3>
+<div class="row">Idioma: <select id="fwLang" onchange="S.fwLang=this.value;loadStock()"><option value="EN" ${S.fwLang==="EN"?"selected":""}>Inglês (EN v1015 — mic on=8, mic off=9)</option><option value="CN" ${S.fwLang==="CN"?"selected":""}>Chinês (CN v0036)</option></select>
+<button class="primary" onclick="loadStock()">Carregar firmware</button></div>
+<div id="fwInfo" class="kv">${S.stock?("Carregado: <b>"+STOCK[S.fwLang].name+"</b> · "+S.stock.length.toLocaleString()+" bytes<br>SHA256: <code>"+S.stockSha+"</code><br>Esperado: <code>"+STOCK[S.fwLang].sha+"</code> · "+(S.stockSha===STOCK[S.fwLang].sha?"<b class='ok'>HASH CONFERE</b>":"<b class='bad'>HASH DIVERGE — PARE</b>")):"Nenhum firmware carregado. Clique em Carregar."}</div>
+<div class="row"><button ${S.stock&&S.stockSha===STOCK[S.fwLang].sha?"":"disabled"} onclick="go(2)">Avançar</button>
+<button class="ghost" onclick="window.mchose.exportFile(STOCK[S.fwLang].name,u8ToB64(S.stock)).then(r=>r.ok&&log('Backup salvo em '+r.path,'t-ok'))" ${S.stock?"":"disabled"}>Salvar backup em disco</button></div></div>`;
+if(S.stock&&S.stockSha!==STOCK[S.fwLang].sha){log("HASH DO FIRMWARE EMBUTIDO DIVERGE — não prossiga.","t-err");}}
+if(S.tab===2){p.innerHTML=`<div class="panel"><h3>2. Inspecionar clips (não altera nada)</h3>
+<div class="row"><button class="primary" ${S.stock?"":"disabled"} onclick="doList()">Listar clips</button><button ${S.variant?"":"disabled"} onclick="go(3)">Avançar</button></div>
+<pre class="out">${S.listText||"A saída aparece aqui."}</pre>
+${S.variant?("<p class='ok'>Tabela: <b>"+S.variant+"</b>"+(S.variant==="EN"?" (mic on=8, mic off=9)":"")+".</p>"):""}
+${S.variant&&S.variant!=="EN"?("<p class='t-warn'>Firmware CN: os índices 8/9 NÃO valem. Mapeie por bisseção (docs/clip-map.md no repo) antes de flashear.</p>"):""}</div>`;}
+if(S.tab===3){p.innerHTML=`<div class="panel"><h3>3. Gerar imagens (aqui dentro, sem Python)</h3>
+<div class="row">Clips: <input type="text" id="clips" value="${S.clips.join(" ")}" /> <button class="primary" onclick="doBuild()">Gerar noop + silenciado</button></div>
+<div class="kv">${S.noop?("noop: "+S.noop.length.toLocaleString()+" bytes · SHA256 <code>"+S.noopSha+"</code><br>silenciado: "+S.silenced.length.toLocaleString()+" bytes · SHA256 <code>"+S.silSha+"</code><br>noop == stock: "+(S.validated?"<b class='ok'>IDÊNTICO — OK</b>":"<b class='bad'>DIFERENTE — PARE</b>")):"Nada gerado ainda."}</div>
+<div class="row"><button ${S.validated?"":"disabled"} onclick="go(4)">Avançar para o flash</button></div></div>`;}
+if(S.tab===4){p.innerHTML=`<div class="panel warn"><h3>4. Flash de validação — NOOP (prova o caminho)</h3>
+<ul><li>Headset ligado, perto do PC, dongle firme, bateria alta.</li><li>Marque a confirmação, conecte, flasheie o <b>noop</b>.</li><li><b>Não troque de janela durante o flash.</b></li></ul>
+<label class="chk"><input type="checkbox" id="ack" /> Li os avisos, headset ligado e próximo, dongle firme</label>
+<div class="row"><button class="primary" onclick="doConnect()">1. Conectar dongle</button><span id="devInfo" class="kv">Nenhum dispositivo.</span></div>
+<div class="row"><button class="danger" onclick="doFlash('noop')">2. FLASH noop</button><button class="ghost" onclick="doDiag()">Diagnóstico 15s</button><button onclick="go(5)">Avançar</button></div></div>`;}
+if(S.tab===5){p.innerHTML=`<div class="panel"><h3>5. Flash silenciado (o flash real)</h3>
+<p class="dim">Só flasheie aqui se o noop deu SUCCESS. Clips: <b>${S.clips.join(", ")}</b></p>
+<label class="chk"><input type="checkbox" id="ack2" /> Noop validado com SUCCESS, pronto para o real</label>
+<div class="row"><button class="danger" onclick="doFlash('silenced')">FLASH silenciado</button><button onclick="go(6)">Ir para testes</button></div></div>`;}
+if(S.tab===6){p.innerHTML=`<div class="panel"><h3>6. Testes (checklist final)</h3>
+<label class="chk"><input type="checkbox" class="t"/> Mute ON sem voz (só gap silencioso)</label>
+<label class="chk"><input type="checkbox" class="t"/> Mute OFF sem voz (só gap silencioso)</label>
+<label class="chk"><input type="checkbox" class="t"/> Power on/off ainda falam</label>
+<label class="chk"><input type="checkbox" class="t"/> Bateria fraca preservada (se reproduzível)</label>
+<label class="chk"><input type="checkbox" class="t"/> Música contínua sem cortes além do gap</label>
+<label class="chk"><input type="checkbox" class="t"/> Reconecta após reboot/sleep</label>
+<div class="row"><button class="primary" onclick="finishTests()">Concluir</button><button class="ghost" onclick="go(7)">Restaurar fábrica</button></div></div>`;}
+if(S.tab===7){p.innerHTML=`<div class="panel warn"><h3>7. Restaurar fábrica (volta exata ao original)</h3>
+<p>Reflasheia o <b>firmware original embutido (${STOCK[S.fwLang].name})</b>. Após SUCCESS, os avisos de mic voltam a falar = original restaurado.</p>
+<div class="row"><button class="primary" onclick="doConnect()">1. Conectar dongle</button><button class="danger" ${S.stock?"":"disabled"} onclick="doFlash('stock')">2. RESTAURAR original</button></div></div>`;}
+}
+
+async function loadStock(){
+try{
+const u8=b64ToU8(STOCK[S.fwLang].b64());
+S.stock=u8;S.stockSha=await sha256hex(u8);
+S.variant=null;S.listText="";S.noop=null;S.silenced=null;S.validated=false;
+if(S.stockSha===STOCK[S.fwLang].sha)log("Firmware "+STOCK[S.fwLang].name+" carregado, hash confere ("+u8.length+" bytes).","t-ok");
+else log("HASH DIVERGE! Esperado "+STOCK[S.fwLang].sha+" obtido "+S.stockSha,"t-err");
+}catch(e){log("Falha ao carregar firmware: "+e.message,"t-err");}
+render();
+}
+function doList(){
+try{
+const r=window.FirmwareJS.listText(S.stock);
+S.listText=r.text;S.variant=r.variant;
+log("Tabela "+r.variant+" com "+r.clips+" clips.","t-ok");
+}catch(e){S.listText="ERRO: "+e.message;log("Listagem falhou: "+e.message,"t-err");}
+render();
+}
+async function doBuild(){
+try{
+const v=($("clips").value||"8 9").trim().split(/[\s,]+/).map(Number).filter(n=>!isNaN(n));
+S.clips=v.length?v:[8,9];
+const r=window.FirmwareJS.buildAll(S.stock,S.clips);
+S.noop=r.noop;S.silenced=r.silenced;
+S.noopSha=await sha256hex(r.noop);S.silSha=await sha256hex(r.silenced);
+let same=r.noop.length===S.stock.length;
+if(same){for(let i=0;i<r.noop.length;i++){if(r.noop[i]!==S.stock[i]){same=false;break;}}}
+S.validated=same;
+if(same)log("noop byte-idêntico ao stock. Variante "+r.variant+". OK.","t-ok");
+else log("noop DIFERE do stock — PARE.","t-err");
+log("silenciado: "+r.silenced.length+" bytes SHA256 "+S.silSha,"t-dim");
+}catch(e){log("Build falhou: "+e.message,"t-err");}
+render();
+}
+function finishTests(){
+const boxes=[...document.querySelectorAll(".t")];const ok=boxes.every(b=>b.checked);
+if(ok){log("Todos os testes marcados. Processo concluído.","t-ok");alert("Concluído. Mic silencioso, resto preservado.");}
+else{log("Faltam testes. Se algo falhou, use a etapa 7.","t-warn");alert("Marque todos os testes. Se algum falhou, restaure na etapa 7.");}
+}
+
+// ---------- WebHID (protocolo verbatim da ferramenta oficial) ----------
+const VID=0x291D,PID=0x385D,R_ENTER=0x55,R_DATA=0x41,CHUNK=63,READY_TO=20000,RESULT_TO=90000;
+let paused=false,readyRes=null,resultRes=null,resumeRes=null,diagMode=false,busy=false,flashing=false;
+function onReport(e){
+const id=e.reportId;const u8=new Uint8Array(e.data.buffer,e.data.byteOffset,e.data.byteLength);
+const n0=u8.length>0?u8[0]:-1,n1=u8.length>1?u8[1]:-1,n2=u8.length>2?u8[2]:-1;
+if(diagMode)log("RX input id=0x"+id.toString(16)+" ("+u8.length+"B)","t-rx");
+if(diagMode)return;
+if(id===R_ENTER&&n0===0x02&&n1===0x01&&n2===0x00){log("--> READY [02 01 00]","t-ok");if(readyRes){const r=readyRes;readyRes=null;r(true);}return;}
+if(id===R_ENTER&&n0===0x60&&n1===0xFF){paused=true;log("--> PAUSE [60 FF]","t-warn");return;}
+if(id===R_ENTER&&n0===0x60&&n1===0x00){paused=false;log("--> RESUME [60 00]","t-dim");if(resumeRes){const r=resumeRes;resumeRes=null;r();}return;}
+if(id===R_ENTER&&n0===0x01&&n2===0x00&&(n1===0x01||n1===0x00)){const ok=n1===0x01;log(ok?"--> SUCCESS [01 01 00]":"--> FAIL [01 00 00]",ok?"t-ok":"t-err");if(resultRes){const r=resultRes;resultRes=null;r(ok);}return;}
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function doConnect(){
+if(!("hid" in navigator)){log("WebHID indisponível. Rode no Windows.","t-err");return false;}
+try{
+let devs=await navigator.hid.requestDevice({filters:[{vendorId:VID,productId:PID}]});
+if(!devs.length){log("Sem match VID/PID, abrindo sem filtro...","t-warn");devs=await navigator.hid.requestDevice({filters:[]});}
+if(!devs.length){log("Nenhum dispositivo.","t-warn");return false;}
+S.device=devs[0];
+if(!S.device.opened)await S.device.open();
+S.device.addEventListener("inputreport",onReport);
+const vp="VID 0x"+S.device.vendorId.toString(16)+" PID 0x"+S.device.productId.toString(16);
+if($("devInfo"))$("devInfo").innerHTML="Conectado: <b>"+(S.device.productName||"HID")+"</b> ("+vp+")";
+log("Conectado: "+(S.device.productName||"HID")+" ("+vp+")","t-ok");
+return true;
+}catch(e){log("Connect falhou: "+e.message,"t-err");return false;}
+}
+async function sendEnter(){const p=new Uint8Array(63);p[0]=R_ENTER;p[1]=0x01;log("TX ENTER UPDATE (headset)","t-tx");await S.device.sendReport(R_ENTER,p);}
+async function waitReady(ms){return new Promise(res=>{let done=false;readyRes=v=>{if(!done){done=true;res(v);}};setTimeout(()=>{if(!done){done=true;readyRes=null;res(false);}},ms);});}
+function fwFor(kind){return kind==="noop"?S.noop:kind==="silenced"?S.silenced:S.stock;}
+async function doFlash(kind){
+if(busy)return;
+const ack=$("ack")||$("ack2");if(ack&&!ack.checked){alert("Marque a confirmação antes de flashear.");return;}
+if(!S.device){const ok=await doConnect();if(!ok)return;}
+const fw=fwFor(kind);if(!fw){log("Nada para flashear (gere na etapa 3).","t-err");return;}
+const magic=String.fromCharCode(fw[0],fw[1],fw[2],fw[3]);
+if(magic!=="AOTA"){log("Arquivo sem magic AOTA ("+magic+"). Abortado.","t-err");return;}
+busy=true;
+try{
+log("=== FLASH "+kind.toUpperCase()+" ("+fw.length+" bytes) ===","t-ok");
+await sendEnter();
+log("Aguardando READY até "+Math.round(READY_TO/1000)+"s...","t-dim");
+const ready=await waitReady(READY_TO);
+if(!ready){log("Sem READY. Headset ligado e próximo? Rode Diagnóstico.","t-err");return;}
+log("READY OK. Contagem 3s — mantenha esta janela em primeiro plano.","t-warn");
+$("countdown").classList.add("show");
+for(let s=3;s>=1;s--){$("cdNum").textContent=s;await sleep(1000);}
+$("countdown").classList.remove("show");
+flashing=true;
+const n=Math.ceil(fw.length/CHUNK);let sent=0;
+const resP=new Promise(r=>{resultRes=r;});
+for(let i=0;i<n;i++){
+if(paused){log("Pausado pelo device, aguardando RESUME...","t-warn");await new Promise(r=>{resumeRes=r;});}
+const st=i*CHUNK,en=Math.min(st+CHUNK,fw.length);
+let pay=fw.subarray(st,en);if(pay.length<CHUNK){const z=new Uint8Array(CHUNK);z.set(pay,0);pay=z;}
+let ok=false,last=null;
+for(let a=1;a<=3;a++){try{await S.device.sendReport(R_DATA,pay);ok=true;break;}catch(e){last=e;await sleep(15);}}
+if(!ok){log("Chunk "+(i+1)+"/"+n+" falhou: "+(last&&last.message),"t-err");return;}
+sent+=en-st;setProg(sent,fw.length);
+if(i===0||i===n-1||((i+1)%1000)===0)log("chunk "+(i+1)+"/"+n+" ("+sent+"/"+fw.length+")","t-dim");
+}
+setProg(fw.length,fw.length);
+log("Stream completo. Aguardando verificação...","t-dim");
+const to=new Promise(r=>setTimeout(()=>r(null),RESULT_TO));
+const ok=await Promise.race([resP,to]);resultRes=null;
+if(ok===true)log("=== FLASH COMPLETO: SUCCESS ===","t-ok");
+else if(ok===false)log("=== FAIL do device. Reflasheie noop/stock. ===","t-err");
+else log("=== Sem resultado no timeout. Não desplugue; rode Diagnóstico. ===","t-warn");
+}catch(e){log("Erro no flash: "+e.message,"t-err");}
+finally{flashing=false;busy=false;$("countdown").classList.remove("show");}
+}
+async function doDiag(){
+if(busy)return;
+if(!S.device){const ok=await doConnect();if(!ok)return;}
+busy=true;diagMode=true;
+try{log("=== DIAGNÓSTICO 15s (sem firmware) ===","t-ok");await sendEnter();await sleep(15000);log("=== DIAGNÓSTICO FIM ===","t-ok");}
+catch(e){log("Diag erro: "+e.message,"t-err");}
+finally{diagMode=false;busy=false;}
+}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"&&flashing){$("focusBanner").textContent="JANELA PERDEU O FOCO — O FLASH VAI TRAVAR! Volte agora.";$("focusBanner").classList.add("show");log("Foco perdido durante flash! Volte agora.","t-err");}else{$("focusBanner").classList.remove("show");}});
+window.go=go;window.loadStock=loadStock;window.doList=doList;window.doBuild=doBuild;
+window.doConnect=doConnect;window.doFlash=doFlash;window.doDiag=doDiag;
+window.copyLog=copyLog;window.saveLog=saveLog;window.finishTests=finishTests;
+(async()=>{try{S.platform=await window.mchose.getPlatform();}catch(e){}renderSteps();render();
+if(S.platform!=="win32")log("Plataforma "+S.platform+": gerar imagens OK aqui; o flash exige Windows.","t-warn");
+else log("Pronto. Etapa 1: carregue o firmware embutido.","t-dim");})();
+</script>
+</body>
+</html>

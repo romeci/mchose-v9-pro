@@ -1,4 +1,7 @@
-# never commit MCHOSE firmware images or build outputs
+# nunca commitar firmware .bin nem build outputs
 *.bin
 __pycache__/
 *.pyc
+electron-app/node_modules/
+electron-app/dist-portable/
+electron-app/dist/
