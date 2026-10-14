@@ -18,6 +18,7 @@ function createWindow() {
   });
   win.loadFile(path.join(__dirname, 'wizard.html'));
   win.webContents.setWindowOpenHandler(() => ({action: 'deny'}));
+  win.on('closed', () => { win = null; try { app.quit(); } catch (_) {} setTimeout(() => { try { app.exit(0); } catch (_) {} }, 300); });
 }
 
 app.whenReady().then(() => {
@@ -52,7 +53,8 @@ app.whenReady().then(() => {
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('window-all-closed', () => { try { app.quit(); } catch (_) {} setTimeout(() => { try { app.exit(0); } catch (_) {} }, 300); });
+app.on('before-quit', () => { try { if (win && !win.isDestroyed()) win.destroy(); } catch (_) {} });
 
 // Exportar arquivo gerado (noop/silenciado/log) — único acesso a disco
 ipcMain.handle('export-file', async (e, suggestedName, b64) => {
