@@ -63,7 +63,7 @@ pre.out{background:#0a0d12;border:1px solid var(--line);border-radius:8px;paddin
 const $=id=>document.getElementById(id);
 function ts(){const d=new Date();return d.toLocaleTimeString()+"."+String(d.getMilliseconds()).padStart(3,"0");}
 function log(m,c){const e=document.createElement("div");if(c)e.className=c;e.textContent="["+ts()+"] "+m;$("log").appendChild(e);$("log").scrollTop=$("log").scrollHeight;}
-function copyLog(){navigator.clipboard.writeText($("log").textContent).then(()=>log("Log copiado.","t-dim"));}
+async function copyLog(){const t=$("log").textContent;try{if(window.mchose.copyText){await window.mchose.copyText(t);log("Log copiado.","t-dim");return;}}catch(e){}try{await navigator.clipboard.writeText(t);log("Log copiado.","t-dim");}catch(e){const ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");log("Log copiado.","t-dim");}catch(_){log("Cópia falhou — use Salvar log.","t-err");}ta.remove();}}
 async function saveLog(){const b=btoa(unescape(encodeURIComponent($("log").textContent)));await window.mchose.exportFile("mchose_log.txt",b);}
 function b64ToU8(b){const s=atob(b);const u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u;}
 function u8ToB64(u){let s="";for(let i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return btoa(s);}
@@ -185,10 +185,12 @@ if(id===R_ENTER&&n0===0x01&&n2===0x00&&(n1===0x01||n1===0x00)){const ok=n1===0x0
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function doConnect(){
 if(!("hid" in navigator)){log("WebHID indisponível. Rode no Windows.","t-err");return false;}
+log("Abrindo seletor de dispositivo... selecione o dongle MCHOSE e clique em Conectar/Connect.","t-warn");
+log("Se a lista vier vazia: desplugue/plugue o dongle, feche o app oficial MCHOSE e tente de novo.","t-dim");
 try{
 let devs=await navigator.hid.requestDevice({filters:[{vendorId:VID,productId:PID}]});
-if(!devs.length){log("Sem match VID/PID, abrindo sem filtro...","t-warn");devs=await navigator.hid.requestDevice({filters:[]});}
-if(!devs.length){log("Nenhum dispositivo.","t-warn");return false;}
+if(!devs.length){log("Filtro VID 0x291D/PID 0x385D não retornou nada. Abrindo lista completa — escolha o HID do dongle (MCHOSE).","t-warn");try{devs=await navigator.hid.requestDevice({filters:[]});}catch(e2){log("Seletor fechado sem escolha: "+e2.message,"t-warn");return false;}}
+if(!devs.length){log("NENHUM dispositivo escolhido. Passos: 1) dongle plugado direto no PC (sem hub) 2) headset ligado e perto 3) fechar app MCHOSE 4) clicar Conectar e ESCOLHER o item da lista.","t-err");return false;}
 S.device=devs[0];
 if(!S.device.opened)await S.device.open();
 S.device.addEventListener("inputreport",onReport);

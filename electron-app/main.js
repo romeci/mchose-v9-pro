@@ -1,4 +1,4 @@
-const {app, BrowserWindow, session, ipcMain, dialog} = require('electron');
+const {app, BrowserWindow, session, ipcMain, dialog, clipboard} = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -48,3 +48,4 @@ ipcMain.handle('export-file', async (e, suggestedName, b64) => {
   return {ok: true, path: r.filePath};
 });
 ipcMain.handle('get-platform', () => process.platform);
+ipcMain.handle('copy-text', (e, t) => { clipboard.writeText(String(t || '')); return {ok: true}; });
