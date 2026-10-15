@@ -29,6 +29,14 @@ Motivo: o `flasher.html` usa **WebHID**, que o Firefox não suporta, e o projeto
 
 Fluxo se você usa Linux/Mac: gere os `.bin` no seu SO e flasheie em um Windows.
 
+## App portable (recomendado — sem instalação)
+
+Baixe em [**Releases → v1.0.0 → MCHOSE-V9-Pro-Portable.zip**](https://github.com/romeci/mchose-v9-pro/releases/tag/v1.0.0), extraia e execute o `.exe`. Sem instalação.
+
+O assistente guia tudo na tela: backup do stock, inspeção dos clips, flash noop (validação), flash silenciado, testes e restauração de fábrica — com o firmware EN/CN embutido.
+
+> Comportamento normal confirmado em teste real: durante o flash o log alterna PAUSE/RESUME (controle de fluxo do chip); no fim o headset reinicia/desliga com voz "disconnected" — **religue e aguarde ~10 s** (áudio tocando = link 2.4G vivo) antes do próximo flash.
+
 ## Requisitos
 
 - Dongle USB 2.4G do headset (o que veio na caixa).
