@@ -263,7 +263,9 @@ if(ok===true){log("=== FLASH COMPLETO: SUCCESS ===","t-ok");if(kind==="noop")S.n
 else if(ok===false)log("=== FAIL do device. Reflasheie noop/stock. ===","t-err");
 else log("=== Sem resultado no timeout. Não desplugue; rode Diagnóstico. ===","t-warn");
 }catch(e){log("Erro no flash: "+e.message,"t-err");}
-finally{flashing=false;busy=false;$("countdown").classList.remove("show");refreshStep4();}
+finally{flashing=false;busy=false;$("countdown").classList.remove("show");refreshStep4();refreshStep5();}
+function refreshStep5(){if(S.tab!==5)return;const b=$("bSil"),a=$("bAdv5");
+if(b)b.disabled=!(S.noopOk&&!busy);if(a)a.disabled=!S.silOk;}
 }
 async function doDiag(){
 if(busy)return;
@@ -276,6 +278,7 @@ finally{diagMode=false;busy=false;refreshStep4();}
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"&&flashing){$("focusBanner").textContent="JANELA PERDEU O FOCO — O FLASH VAI TRAVAR! Volte agora.";$("focusBanner").classList.add("show");log("Foco perdido durante flash! Volte agora.","t-err");}else{$("focusBanner").classList.remove("show");}});
 window.go=go;window.loadStock=loadStock;window.doList=doList;window.doBuild=doBuild;
 window.doConnect=doConnect;window.doFlash=doFlash;window.doDiag=doDiag;
+window.refreshStep5=refreshStep5;
 window.onAck=onAck;
 window.copyLog=copyLog;window.saveLog=saveLog;window.finishTests=finishTests;
 function showHidList(list){if(!list||!list.length){log("HIDs visíveis: (nenhum) — Windows não expôs nenhum HID ao app.","t-err");return;}
