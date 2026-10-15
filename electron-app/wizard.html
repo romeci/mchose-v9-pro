@@ -76,7 +76,7 @@ const STOCK={
 };
 const TITLES=["0. Segurança","1. Firmware original","2. Inspecionar clips","3. Gerar imagens","4. Flash validação","5. Flash silenciado","6. Testes","7. Restaurar fábrica"];
 const DESCS=["Regras que evitam brick","EN/CN embutidos, hash OK","Listar sem alterar","noop + silenciado aqui dentro","Prova o caminho","O flash real","Checklist final","Volta ao original"];
-function renderSteps(){$("steps").innerHTML="";TITLES.forEach((t,i)=>{const d=document.createElement("div");d.className="step"+(i===S.tab?" active":"")+((i===1&&S.stock)||(i===3&&S.validated)?" done":"");d.innerHTML="<span class='n'>"+(i+1)+"</span>"+t+"<small>"+DESCS[i]+"</small>";d.onclick=()=>go(i);$("steps").appendChild(d);});}
+function renderSteps(){$("steps").innerHTML="";TITLES.forEach((t,i)=>{const d=document.createElement("div");d.className="step"+(i===S.tab?" active":"")+((i===1&&S.stock)||(i===3&&S.validated)?" done":"");d.innerHTML=t+"<small>"+DESCS[i]+"</small>";d.onclick=()=>go(i);$("steps").appendChild(d);});}
 function go(i){S.tab=i;renderSteps();render();}
 function setProg(d,t){const p=t?Math.floor(d*100/t):0;$("prog").value=p;$("pct").textContent=p+"%";}
 
@@ -115,8 +115,8 @@ if(S.tab===4){p.innerHTML=`<div class="panel warn"><h3>4. Flash de validação �
 <li><b>Passo 4:</b> <b>Avançar</b> libera só após o SUCCESS.</li>
 </ol>
 <label class="chk"><input type="checkbox" id="ack" ${ackChecked()?"checked":""} onchange="onAck(this.checked)" /> Li os avisos, headset ligado e próximo, dongle firme</label>
-<div class="row"><button class="primary" id="bConn" onclick="doConnect()" ${S.connected?"":"disabled"}>1. Conectar dongle</button><span id="devInfo" class="kv">${S.connected?"Conectado: <b>MCHOSE V9 PRO</b>":"Nenhum dispositivo."}</span></div>
-<div class="row"><button class="danger" id="bNoop" onclick="doFlash('noop')" ${S.connected&&!busy?"":"disabled"}>2. FLASH noop ${S.noopOk?"✓ SUCCESS":""}</button><button id="bAdv4" onclick="go(5)" ${S.noopOk?"":"disabled"}>3. Avançar</button></div>
+<div class="row"><button class="primary" id="bConn" onclick="doConnect()" ${ackChecked()?"":"disabled"}>Conectar dongle</button><span id="devInfo" class="kv">${S.connected?"Conectado: <b>MCHOSE V9 PRO</b>":"Nenhum dispositivo."}</span></div>
+<div class="row"><button class="danger" id="bNoop" onclick="doFlash('noop')" ${S.connected&&!busy?"":"disabled"}>FLASH noop ${S.noopOk?"✓ SUCCESS":""}</button><button id="bAdv4" onclick="go(5)" ${S.noopOk?"":"disabled"}>Avançar</button></div>
 <div class="panel" style="margin-top:12px;border-style:dashed"><b class="dim">Ferramenta separada — Diagnóstico 15s (OPCIONAL)</b><br><small class="dim">Só use se o flash falhar sem READY. Não faz parte do fluxo: coloca o headset em update e <b>desliga no final (voz "disconnected") — religue depois</b>. Não precisa rodar para liberar nada.</small><br><button class="ghost" id="bDiag" onclick="doDiag()" ${S.connected&&!busy?"":"disabled"}>Rodar diagnóstico (opcional)</button></div></div>`;}
 if(S.tab===5){p.innerHTML=`<div class="panel"><h3>5. Flash silenciado (o flash real)</h3>
 <ol class="dim" style="padding-left:20px;margin:0 0 8px">
@@ -285,9 +285,12 @@ function showHidList(list){if(!list||!list.length){log("HIDs visíveis: (nenhum)
 log("HIDs visíveis: "+list.map(d=>((d.name||"HID")+" VID 0x"+(d.vendorId||0).toString(16)+" PID 0x"+(d.productId||0).toString(16))).join(" | "),"t-dim");}
 let _ack=false;
 function ackChecked(){return _ack;}
-function onAck(v){_ack=v;const b=$("bConn");if(b)b.disabled=!v;refreshStep4();}
+function onAck(v){_ack=v;if(S.tab===4)refreshStep4();}
 function refreshStep4(){if(S.tab!==4)return;const d=$("bDiag"),n=$("bNoop"),a=$("bAdv4");
 if(d)d.disabled=!(S.connected&&!busy);if(n)n.disabled=!(S.connected&&!busy);if(a)a.disabled=!S.noopOk;}
+function refreshStep5(){if(S.tab!==5)return;const b=$("bSil"),a=$("bAdv5");
+if(b)b.disabled=!(S.noopOk&&!busy);if(a)a.disabled=!S.silOk;}
+function setConnected(v){S.connected=v;if(S.tab===4)render();}
 (async()=>{try{S.platform=await window.mchose.getPlatform();}catch(e){}try{if(window.mchose.onHidList)window.mchose.onHidList(showHidList);}catch(e){}renderSteps();render();
 if(S.platform!=="win32")log("Plataforma "+S.platform+": gerar imagens OK aqui; o flash exige Windows.","t-warn");
 else log("Pronto. Etapa 1: carregue o firmware embutido.","t-dim");})();
